@@ -21,6 +21,7 @@ namespace Cassandra
         }
 
         [StructLayout(LayoutKind.Sequential)]
+        [FfiLayout("CSharpHostData")]
         struct CSharpHostData
         {
             public FFISliceRaw IdBytes;
@@ -127,10 +128,11 @@ namespace Cassandra
         }
 
         [StructLayout(LayoutKind.Sequential)]
+        [FfiLayout("ReplicaPair")]
         private readonly struct ReplicaPair
         {
             // Points to a 16-byte UUID (Rust side: *const [u8; 16]).
-            public readonly IntPtr HostIdBytesPtr;
+            public readonly IntPtr HostIdPtr;
             public readonly uint Shard;
         }
 
@@ -144,7 +146,7 @@ namespace Cassandra
                 var context = Unsafe.AsRef<GetReplicasContext>((void*)contextPtr);
 
                 const int HostIdLength = 16;
-                var hostIdBytes = new ReadOnlySpan<byte>((void*)replica.HostIdBytesPtr, HostIdLength);
+                var hostIdBytes = new ReadOnlySpan<byte>((void*)replica.HostIdPtr, HostIdLength);
                 var hostId = GuidFromFFIFormat(hostIdBytes);
 
                 if (context.HostsById.TryGetValue(hostId, out var host))
@@ -302,17 +304,18 @@ namespace Cassandra
         }
 
         [StructLayout(LayoutKind.Sequential)]
+        [FfiLayout("StrategyAddRepFactor")]
         private unsafe readonly struct StrategyAddRepFactorCallbacks
         {
-            public readonly IntPtr SimpleStrategyCallback;
-            public readonly IntPtr NetworkTopologyStrategyCallback;
-            public readonly IntPtr OtherStrategyCallback;
+            public readonly IntPtr SimpleStrategy;
+            public readonly IntPtr NetworkTopologyStrategy;
+            public readonly IntPtr OtherStrategy;
 
             public StrategyAddRepFactorCallbacks()
             {
-                SimpleStrategyCallback = (IntPtr)SimpleStrategyAddRepFactorPtr;
-                NetworkTopologyStrategyCallback = (IntPtr)NetworkTopologyStrategyAddRepFactorPtr;
-                OtherStrategyCallback = (IntPtr)OtherStrategyAddRepFactorPtr;
+                SimpleStrategy = (IntPtr)SimpleStrategyAddRepFactorPtr;
+                NetworkTopologyStrategy = (IntPtr)NetworkTopologyStrategyAddRepFactorPtr;
+                OtherStrategy = (IntPtr)OtherStrategyAddRepFactorPtr;
             }
         }
 

@@ -1,3 +1,4 @@
+use ffi_type_derive::FFIType;
 use futures::FutureExt;
 use std::ffi::c_void;
 use std::fmt::Debug;
@@ -30,6 +31,7 @@ static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| Runtime::new().unwrap());
 /// It contains a pointer to the resource and a function pointer to its destructor.
 /// All changes to this struct's fields must be mirrored in C# code in the exact same order.
 #[repr(C)]
+#[derive(FFIType)]
 pub struct ManuallyDestructible {
     pub ptr: BridgedOwnedSharedPtr<c_void>,
     pub destructor: Option<unsafe extern "C" fn(BridgedOwnedSharedPtr<c_void>)>,
@@ -129,7 +131,7 @@ struct Tcs<T> {
 /// so the runtime can safely call the managed completion callback with a concrete
 /// struct parameter.
 #[repr(C)]
-#[derive(Default)]
+#[derive(Default, FFIType)]
 pub struct EmptyAsyncResult {
     // Dummy field to ensure non-zero size for C# FFI compatibility (1 byte).
     _dummy: u8,
@@ -148,6 +150,7 @@ impl From<()> for EmptyAsyncResult {
 /// as well as function pointers to complete (finish successfully)
 /// or fail (set an exception) the task.
 #[repr(C)] // <- Ensure FFI-compatible layout
+#[derive(FFIType)]
 pub struct Tcb<R> {
     tcs: FFIGCHandle<Tcs<R>>,
     /// Function pointer type to complete a TaskCompletionSource with a result.
@@ -164,6 +167,8 @@ pub struct Tcb<R> {
 /// This struct holds function pointers to create various exception types.
 /// Any changes here must be mirrored on the C# side in the exact same order (alphabetical).
 #[repr(C)]
+#[derive(FFIType)]
+#[ffi_type(all_words)]
 pub struct ExceptionConstructors {
     pub already_exists_constructor: AlreadyExistsConstructor,
     pub already_shutdown_exception_constructor: AlreadyShutdownExceptionConstructor,
