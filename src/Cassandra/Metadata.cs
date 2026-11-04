@@ -31,6 +31,8 @@ namespace Cassandra
     /// </summary>
     public class Metadata : IDisposable
     {
+        private static readonly Logger Logger = new Logger(typeof(Metadata));
+
 #pragma warning disable CS0067
         public event HostsEventHandler HostsEvent;
 
@@ -569,13 +571,27 @@ namespace Cassandra
         /// Schema changes need to be propagated to all nodes in the cluster.
         /// Once they have settled on a common version, we say that they are in agreement.
         /// <para/>
-        /// This method does not perform retries so
+        /// The Rust driver waits for schema agreement up to its schema agreement timeout.
         /// <see cref="ProtocolOptions.MaxSchemaAgreementWaitSeconds"/> does not apply.
         /// </summary>
-        /// <returns>True if schema agreement was successful and false if it was not successful.</returns>
-        public Task<bool> CheckSchemaAgreementAsync()
+        /// <returns>True if schema agreement was reached and false if it was not reached.</returns>
+        public async Task<bool> CheckSchemaAgreementAsync()
         {
-            throw new NotImplementedException();
+            var session = _getActiveSessionOrThrow();
+            try
+            {
+                await session.WaitForSchemaAgreementAsync().ConfigureAwait(false);
+                return true;
+            }
+            catch (SchemaAgreementException ex)
+            {
+                Metadata.Logger.Error("Error while checking schema agreement.", ex);
+                return false;
+            }
+            finally
+            {
+                session.DecreaseReferenceCount();
+            }
         }
     }
 }
