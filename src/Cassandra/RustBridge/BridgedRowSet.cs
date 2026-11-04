@@ -115,7 +115,7 @@ namespace Cassandra
         /// Extracts the columns metadata from the Rust RowSet.
         /// </summary>
         /// <returns>An array of CqlColumn representing the columns metadata.</returns>
-        internal CqlColumn[] ExtractColumnsFromRust()
+        internal CqlColumn[] ExtractColumnsFromRust(IGenericSerializer serializer)
         {
             // Query Rust for the number of columns
             var count = GetColumnsCount();
@@ -141,7 +141,27 @@ namespace Cassandra
             // so they must live at least until `return`.
             // GC.KeepAlive(columns);
 
+            AssignClrTypes(columns, serializer);
+
             return columns;
+        }
+
+        /// <summary>
+        /// Sets <see cref="CqlColumn.Type"/> of each column to the CLR type that the serializer
+        /// produces for the column's type code and type info.
+        /// <para>
+        /// Legacy did the same (<c>col.Type = reader.Serializer.GetClrType(...)</c>).
+        /// The Mapper and <see cref="Row.GetEnumerator"/> read values as <see cref="CqlColumn.Type"/>,
+        /// so this type must match the deserialized value (for example <c>IEnumerable&lt;T&gt;</c>
+        /// for a list, <c>DateTimeOffset</c> for a timestamp, the mapped POCO for a UDT).
+        /// </para>
+        /// </summary>
+        internal static void AssignClrTypes(CqlColumn[] columns, IGenericSerializer serializer)
+        {
+            foreach (var col in columns)
+            {
+                col.Type = serializer.GetClrType(col.TypeCode, col.TypeInfo);
+            }
         }
 
         unsafe static readonly delegate* unmanaged[Cdecl]<IntPtr, nuint, FFIString, FFIString, FFIString, byte, IntPtr, byte, FFIMaybeException> setColumnMetaPtr = &SetColumnMeta;
@@ -190,7 +210,10 @@ namespace Cassandra
                     col.Table = table.ToManagedString();
                     col.TypeCode = (ColumnTypeCode)typeCode;
                     col.Index = index;
-                    col.Type = MapTypeFromCode(col.TypeCode);
+                    // col.Type needs the serializer, which this callback does not get.
+                    // The callers set it with AssignClrTypes after Rust fills all columns:
+                    // - ExtractColumnsFromRust, for the columns of a RowSet.
+                    // - BridgedPreparedStatement.ExtractVariablesMetadataFromRust, for the bind variables.
                     col.IsFrozen = isFrozen != 0;
 
                     // If a non-null type-info handle was provided by Rust, build the corresponding IColumnInfo

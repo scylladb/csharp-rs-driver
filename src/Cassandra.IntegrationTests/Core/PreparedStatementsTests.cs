@@ -432,6 +432,26 @@ namespace Cassandra.IntegrationTests.Core
         }
 
         [Test]
+        public void Prepare_Variables_Have_Serializer_Clr_Types()
+        {
+            // Legacy set CqlColumn.Type of each variable with serializer.GetClrType, like for a RowSet column.
+            var query = string.Format(
+                "INSERT INTO {0} (id, int_sample, timestamp_sample, list_sample, map_sample) VALUES (?, ?, ?, ?, ?)",
+                AllTypesTableName);
+            var columns = Session.Prepare(query).Variables.Columns;
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    typeof(Guid),
+                    typeof(int),
+                    typeof(DateTimeOffset),
+                    typeof(IEnumerable<string>),
+                    typeof(IDictionary<string, string>)
+                },
+                columns.Select(c => c.Type).ToArray());
+        }
+
+        [Test]
         [TestCassandraVersion(2, 0)]
         public void Bound_NamedParamsOrder()
         {
