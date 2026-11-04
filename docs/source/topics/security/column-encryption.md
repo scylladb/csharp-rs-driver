@@ -1,5 +1,7 @@
 # Column Encryption
 
+> **Note**: This feature is not implemented in this release of the driver. `Builder.WithColumnEncryptionPolicy` throws `NotSupportedException` for a non-null policy.
+
 ## Overview
 
 Support for client-side encryption of data was added in version 3.20.0 of the C# driver. When using this feature data will be encrypted on-the-fly according to a provided implementation of `IColumnEncryptionPolicy`. This policy is also used to decrypt data in returned rows.  If a prepared statement is used, this decryption is transparent to the user; retrieved data will be decrypted and converted into the original
