@@ -16,7 +16,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace Cassandra
 {
@@ -77,10 +76,16 @@ namespace Cassandra
 
         }
 
-        internal void SetValues(IDictionary<string, TableColumn> columns, TableColumn[] partitionKeys, Tuple<TableColumn, SortOrder>[] clusteringKeys, TableOptions options)
+        /// <param name="columns">The columns by name.</param>
+        /// <param name="tableColumns">The same columns in the order of <see cref="TableColumns"/>.
+        /// The order of a dictionary is undefined, so the caller gives it explicitly.</param>
+        /// <param name="partitionKeys">The partition key columns.</param>
+        /// <param name="clusteringKeys">The clustering key columns.</param>
+        /// <param name="options">The table options.</param>
+        internal void SetValues(IDictionary<string, TableColumn> columns, TableColumn[] tableColumns, TableColumn[] partitionKeys, Tuple<TableColumn, SortOrder>[] clusteringKeys, TableOptions options)
         {
             ColumnsByName = columns;
-            TableColumns = columns.Values.ToArray();
+            TableColumns = tableColumns;
             PartitionKeys = partitionKeys;
             ClusteringKeys = clusteringKeys;
             Options = options;

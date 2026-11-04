@@ -187,7 +187,19 @@ namespace Cassandra.IntegrationTests.Core
 
             CheckTableMetadataColumns(tableMetadata, tableName, keyspaceName, new[] { "pk", "ck", "s", "fl", "t" });
 
+            // Like the legacy driver: TableColumns is sorted by column name (ordinal).
+            CollectionAssert.AreEqual(
+                new[] { "ck", "fl", "pk", "s", "t" },
+                tableMetadata.TableColumns.Select(c => c.Name).ToArray(),
+                "TableColumns should be sorted by column name");
+
             var columns = tableMetadata.TableColumns.ToDictionary(c => c.Name);
+
+            Assert.AreEqual(KeyType.Partition, columns["pk"].KeyType);
+            Assert.AreEqual(KeyType.Clustering, columns["ck"].KeyType);
+            Assert.AreEqual(KeyType.None, columns["s"].KeyType);
+            Assert.AreEqual(KeyType.None, columns["fl"].KeyType);
+            Assert.AreEqual(KeyType.None, columns["t"].KeyType);
 
             Assert.IsNull(columns["pk"].TypeInfo);
             Assert.AreEqual(ColumnTypeCode.Int, columns["pk"].TypeCode);
