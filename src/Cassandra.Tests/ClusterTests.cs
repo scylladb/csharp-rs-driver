@@ -43,6 +43,14 @@ namespace Cassandra.Tests
         }
 
         [Test]
+        public void Metadata_CheckSchemaAgreementAsync_Throws_Before_Connect()
+        {
+            using var cluster = Cluster.Builder().AddContactPoint("127.100.100.100").Build();
+            NUnit.Framework.Assert.ThrowsAsync<InvalidOperationException>(
+                async () => await cluster.Metadata.CheckSchemaAgreementAsync().ConfigureAwait(false));
+        }
+
+        [Test]
         public void ClusterIsDisposableAfterInitError()
         {
             const string ip = "127.100.100.100";

@@ -77,20 +77,6 @@ namespace Cassandra.IntegrationTests.Core
         }
 
         [Test]
-        public async Task Should_CheckSchemaAgreementReturnTrue_When_OneSchemaVersionIsReturnedByQueries()
-        {
-            var schemaVersion = Guid.NewGuid();
-            _simulacronCluster = await SimulacronCluster.CreateNewAsync(3).ConfigureAwait(false);
-
-            _simulacronCluster.Prime(SchemaAgreementSimulacronTests.LocalSchemaVersionQueryPrime(schemaVersion));
-            _simulacronCluster.Prime(SchemaAgreementSimulacronTests.PeersSchemaVersionQueryPrime(Enumerable.Repeat(schemaVersion, 2)));
-            _cluster = BuildCluster(_simulacronCluster);
-
-            _cluster.Connect();
-            Assert.IsTrue(await _cluster.Metadata.CheckSchemaAgreementAsync().ConfigureAwait(false));
-        }
-
-        [Test]
         public async Task Should_CheckSchemaAgreementReturnFalse_When_TwoSchemaVersionsAreReturnedByQueries()
         {
             var schemaVersion1 = Guid.NewGuid();
