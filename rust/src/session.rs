@@ -205,6 +205,9 @@ pub extern "C" fn session_check_local_dc_existence(
 
 /// Shuts down the session by acquiring a write lock and clearing the connected state.
 /// This blocks all future queries. Once shutdown, the session cannot be used for queries anymore.
+///
+/// A second shutdown of the same session fails the task with
+/// `SessionOperationError::AlreadyShutdown`, which C# receives as `AlreadyShutdownException`.
 #[unsafe(no_mangle)]
 pub extern "C" fn session_shutdown(
     tcb: Tcb<ManuallyDestructible>,
@@ -216,7 +219,7 @@ pub extern "C" fn session_shutdown(
 
     tracing::trace!("[FFI] Scheduling session shutdown");
 
-    BridgedFuture::spawn::<_, _, Infallible, _>(tcb, async move {
+    BridgedFuture::spawn::<_, _, SessionOperationError<Infallible>, _>(tcb, async move {
         tracing::debug!("[FFI] Shutting down session");
 
         // Acquire write lock - this will pause the asynchronous execution until all read locks (queries)
@@ -224,7 +227,7 @@ pub extern "C" fn session_shutdown(
         let mut session_guard = session_arc.write().await;
 
         if session_guard.session.is_none() {
-            panic!("Session is already shut down");
+            return Err(SessionOperationError::AlreadyShutdown);
         }
 
         session_guard.session = None;
