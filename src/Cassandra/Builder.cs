@@ -611,9 +611,22 @@ namespace Cassandra
         /// </summary>
         /// <param name="policy">the column encryption policy to use</param>
         /// <returns>this Builder</returns>
+        /// <exception cref="NotSupportedException">
+        /// Always thrown when <paramref name="policy"/> is not <c>null</c>.
+        /// Column encryption is not implemented yet in this driver.
+        /// The driver would silently write plaintext and read raw blobs, so the policy is rejected up front.
+        /// </exception>
         public Builder WithColumnEncryptionPolicy(IColumnEncryptionPolicy policy)
         {
-            _columnEncryptionPolicy = policy;
+            if (policy != null)
+            {
+                throw new NotSupportedException(
+                    "Column encryption is not supported yet. " +
+                    "A configured IColumnEncryptionPolicy would be ignored: values would be written as plaintext " +
+                    "and read back as raw blobs. Remove the WithColumnEncryptionPolicy call.");
+            }
+
+            _columnEncryptionPolicy = null;
             return this;
         }
 

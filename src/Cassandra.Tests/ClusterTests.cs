@@ -52,5 +52,21 @@ namespace Cassandra.Tests
             Assert.Throws<NoHostAvailableException>(() => cluster.Connect());
             Assert.DoesNotThrow(cluster.Dispose);
         }
+
+        [Test]
+        public void Builder_WithColumnEncryptionPolicy_Throws_NotSupported()
+        {
+            // Column encryption is not implemented yet. The builder must reject the policy
+            // at configuration time instead of silently writing plaintext.
+            var policy = new Mock<IColumnEncryptionPolicy>().Object;
+            var ex = Assert.Throws<NotSupportedException>(() => Cluster.Builder().WithColumnEncryptionPolicy(policy));
+            Assert.IsTrue(ex.Message.Contains("Column encryption"), ex.Message);
+        }
+
+        [Test]
+        public void Builder_WithColumnEncryptionPolicy_Null_Does_Not_Throw()
+        {
+            Assert.DoesNotThrow(() => Cluster.Builder().WithColumnEncryptionPolicy(null));
+        }
     }
 }
