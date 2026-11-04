@@ -513,6 +513,18 @@ namespace Cassandra
             return bridgedSession.GetClusterState();
         }
 
+        /// <summary>
+        /// Checks once if all reachable nodes have the same schema version. It does not retry.
+        /// </summary>
+        /// <param name="timeoutMillis">
+        /// The timeout of the check, in milliseconds. When it expires, the task fails with
+        /// <see cref="SchemaAgreementTimeoutException"/>. A value of 0 or less disables the timeout.
+        /// </param>
+        internal Task<bool> CheckSchemaAgreementAsync(int timeoutMillis)
+        {
+            return bridgedSession.CheckSchemaAgreement(timeoutMillis);
+        }
+
         internal bool TryIncreaseReferenceCount()
         {
             return bridgedSession.TryIncreaseReferenceCount();

@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cassandra.Serialization;
+using Cassandra.Tasks;
 using static Cassandra.RustBridge;
 
 namespace Cassandra
@@ -85,6 +86,9 @@ namespace Cassandra
 
         [DllImport(NativeLibrary.CSharpWrapper, CallingConvention = CallingConvention.Cdecl)]
         unsafe private static extern void session_await_schema_agreement_with_required_node(Tcb<EmptyAsyncResult> tcb, IntPtr session, byte* hostId);
+
+        [DllImport(NativeLibrary.CSharpWrapper, CallingConvention = CallingConvention.Cdecl)]
+        unsafe private static extern void session_check_schema_agreement(Tcb<FFIBool> tcb, IntPtr session, int timeoutMillis);
 
         /// <summary>
         /// Creates a new session connected to the specified Cassandra URI.
@@ -335,6 +339,20 @@ namespace Cassandra
                         (tcb, ptr) => session_await_schema_agreement_with_required_node(tcb, ptr, (byte*)hostIdAddr));
                 }
             }
+        }
+
+        /// <summary>
+        /// Checks once if all reachable nodes have the same schema version. It does not retry.
+        /// </summary>
+        /// <param name="timeoutMillis">
+        /// The timeout of the check, in milliseconds. When it expires, the task fails with
+        /// <see cref="SchemaAgreementTimeoutException"/>. A value of 0 or less disables the timeout.
+        /// </param>
+        /// <returns>True if the nodes agree, false if they do not.</returns>
+        internal Task<bool> CheckSchemaAgreement(int timeoutMillis)
+        {
+            return RunAsyncWithIncrement<FFIBool>((tcb, ptr) => session_check_schema_agreement(tcb, ptr, timeoutMillis))
+                .ContinueSync(result => (bool)result);
         }
 
         /// <summary>

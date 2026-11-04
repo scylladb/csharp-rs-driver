@@ -1,6 +1,7 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::RwLock as StdRwLock;
+use std::time::Duration;
 
 use scylla::client::session::Session;
 use scylla::cluster::ClusterState;
@@ -799,4 +800,64 @@ pub extern "C" fn session_await_schema_agreement_with_required_node(
         Ok(bridge) => bridge.spawn(tcb),
         Err(e) => tcb.fail_sync(e),
     }
+}
+
+/// Checks once if all reachable nodes have the same schema version.
+/// The task completes with `true` if they agree, and with `false` if they do not.
+///
+/// Unlike `session_await_schema_agreement`, it does not retry until the schema
+/// agreement timeout. Thus it holds the session read lock only for one round of
+/// schema version queries.
+///
+/// The Rust driver sets no timeout on the schema version queries. Thus, if a node
+/// does not answer, the check can wait forever, and a shutdown then waits forever too.
+/// To prevent this, the check stops after `timeout_millis` and the task fails with
+/// a schema agreement timeout. When the check stops, it releases the read lock.
+/// If `timeout_millis` is 0 or less, the check has no timeout. The legacy driver
+/// used the same rule for its read timeout.
+#[unsafe(no_mangle)]
+pub extern "C" fn session_check_schema_agreement(
+    tcb: Tcb<bool>,
+    session_ptr: BridgedBorrowedSharedPtr<'_, BridgedSession>,
+    timeout_millis: i32,
+) {
+    let Some(session_arc) = ArcFFI::cloned_from_ptr(session_ptr) else {
+        tcb.fail_sync(InvalidArgumentError("invalid or null session pointer"));
+        return;
+    };
+
+    // A negative value is not a valid u64, so it also gives no timeout.
+    let timeout = u64::try_from(timeout_millis)
+        .ok()
+        .filter(|&millis| millis > 0)
+        .map(Duration::from_millis);
+
+    // Same as SchemaAgreementBridge::spawn: if a shutdown already holds or waits for
+    // the write lock, report AlreadyShutdown instead of waiting for it.
+    let session_guard_res = session_arc.try_read_owned();
+
+    tracing::trace!("[FFI] Scheduling session_check_schema_agreement");
+
+    BridgedFuture::spawn::<_, _, SessionOperationError<SchemaAgreementError>, _>(tcb, async move {
+        let Ok(session_guard) = session_guard_res else {
+            return Err(SessionOperationError::AlreadyShutdown);
+        };
+
+        let Some(session) = session_guard.session.as_ref() else {
+            return Err(SessionOperationError::AlreadyShutdown);
+        };
+
+        let check = session.check_schema_agreement();
+        let check_result = match timeout {
+            Some(timeout) => match tokio::time::timeout(timeout, check).await {
+                Ok(result) => result,
+                // tokio dropped the check future. Thus the driver no longer waits for the answers.
+                Err(_elapsed) => Err(SchemaAgreementError::Timeout(timeout)),
+            },
+            None => check.await,
+        };
+        let agreed_version = check_result.map_err(SessionOperationError::Inner)?;
+
+        Ok(agreed_version.is_some())
+    });
 }
