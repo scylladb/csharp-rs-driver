@@ -155,7 +155,7 @@ dependencies = [
  "futures",
  "ntest",
  "scylla",
- "scylla-cql",
+ "scylla-cql-core",
  "thiserror",
  "tokio",
  "tracing",
