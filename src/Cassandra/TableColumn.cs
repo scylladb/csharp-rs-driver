@@ -22,6 +22,13 @@ namespace Cassandra
     /// <summary>
     /// Represents a table column information
     /// </summary>
+    /// <remarks>
+    /// The driver does not set <see cref="CqlColumn.Type"/> for a table column. It is always <c>null</c>, like in the legacy driver.
+    /// The CLR type of a value depends on the serializer configuration, for example on the UDT mappings.
+    /// These mappings can change after the driver reads the schema.
+    /// Use <see cref="ColumnDesc.TypeCode"/> and <see cref="ColumnDesc.TypeInfo"/> to get the CQL type of the column.
+    /// <see cref="CqlColumn.Type"/> of a <see cref="RowSet"/> column gives the CLR type of its values.
+    /// </remarks>
     public class TableColumn : CqlColumn
     {
         /// <summary>
