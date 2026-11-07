@@ -529,40 +529,5 @@ namespace Cassandra
             }
             return endpoint != null ? new List<IPEndPoint> { endpoint } : new List<IPEndPoint>(0);
         }
-
-        internal static Type MapTypeFromCode(ColumnTypeCode code)
-        {
-            return code switch
-            {
-                ColumnTypeCode.Ascii => typeof(string),
-                ColumnTypeCode.Bigint => typeof(long),
-                ColumnTypeCode.Blob => typeof(byte[]),
-                ColumnTypeCode.Boolean => typeof(bool),
-                ColumnTypeCode.Counter => typeof(long),
-                ColumnTypeCode.Decimal => typeof(decimal),
-                ColumnTypeCode.Double => typeof(double),
-                ColumnTypeCode.Float => typeof(float),
-                ColumnTypeCode.Int => typeof(int),
-                ColumnTypeCode.Text => typeof(string),
-                ColumnTypeCode.Timestamp => typeof(DateTime),
-                ColumnTypeCode.Uuid => typeof(Guid),
-                ColumnTypeCode.Varchar => typeof(string),
-                ColumnTypeCode.Varint => typeof(System.Numerics.BigInteger),
-                ColumnTypeCode.Timeuuid => typeof(Guid),
-                ColumnTypeCode.Inet => typeof(System.Net.IPAddress),
-                ColumnTypeCode.Date => typeof(DateOnly),
-                ColumnTypeCode.Time => typeof(TimeOnly),
-                ColumnTypeCode.SmallInt => typeof(short),
-                ColumnTypeCode.TinyInt => typeof(sbyte),
-                ColumnTypeCode.Duration => typeof(TimeSpan),
-                ColumnTypeCode.List => typeof(object),
-                ColumnTypeCode.Map => typeof(object),
-                ColumnTypeCode.Set => typeof(object),
-                ColumnTypeCode.Vector => typeof(object),
-                ColumnTypeCode.Udt => typeof(object),
-                ColumnTypeCode.Tuple => typeof(object),
-                _ => typeof(object)
-            };
-        }
     }
 }
