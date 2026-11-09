@@ -4,10 +4,10 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
-scylla = { version = "1.9.0", features = [
+scylla = { version = "=1.10.0", features = [
     "unstable-csharp-rs",
 ] }
-scylla-cql-core = { version = "2.0.0", package = "scylla-cql" }
+scylla-cql-core = { version = "=1.10.0" }
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 thiserror = "2"
@@ -36,6 +36,6 @@ panic = "abort"
 ntest = "0.9"
 
 [lints.rust]
-unsafe-op-in-unsafe-fn = "warn"
+unsafe_op_in_unsafe_fn = "warn"
 unnameable_types = "warn"
 # unreachable_pub = "warn"
