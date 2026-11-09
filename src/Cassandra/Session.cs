@@ -172,17 +172,24 @@ namespace Cassandra
                 cluster.RemoveSession(this);
             }
 
-            // First, we shutdown the session in Rust - this acquires a write lock,
-            // waits for all ongoing queries to complete, and blocks future queries.
-            Task<RustBridge.ManuallyDestructible> shutdownTask = bridgedSession.Shutdown();
-            RustBridge.ManuallyDestructible emptyBridgedResult = await shutdownTask.ConfigureAwait(false);
-            EmptyRustResource emptyResource = new EmptyRustResource(emptyBridgedResult);
+            try
+            {
+                // First, we shutdown the session in Rust - this acquires a write lock,
+                // waits for all ongoing queries to complete, and blocks future queries.
+                Task<RustBridge.ManuallyDestructible> shutdownTask = bridgedSession.Shutdown();
+                RustBridge.ManuallyDestructible emptyBridgedResult = await shutdownTask.ConfigureAwait(false);
+                EmptyRustResource emptyResource = new EmptyRustResource(emptyBridgedResult);
 
-            // Free the empty bridged result returned by shutdown
-            emptyResource.Dispose();
-
-            // Then we dispose the bridged session synchronously (calls session_free in Rust).
-            bridgedSession.Dispose();
+                // Free the empty bridged result returned by shutdown
+                emptyResource.Dispose();
+            }
+            finally
+            {
+                // Then we dispose the bridged session synchronously (calls session_free in Rust).
+                // This also runs when the shutdown task fails. _disposed is already set,
+                // so no later call frees the native session.
+                bridgedSession.Dispose();
+            }
         }
 
         /// <inheritdoc />
