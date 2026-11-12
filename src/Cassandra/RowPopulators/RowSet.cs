@@ -120,11 +120,11 @@ namespace Cassandra
         internal RowSet(RustBridge.ManuallyDestructible mdRowSet, ISerializerManager serializerManager)
         {
             bridgedRowSet = new BridgedRowSet(mdRowSet);
-            Columns = bridgedRowSet.ExtractColumnsFromRust();
+            _genericSerializer = serializerManager?.GetGenericSerializer() ?? new GenericSerializer();
+            Columns = bridgedRowSet.ExtractColumnsFromRust(_genericSerializer);
             _exhausted = Columns.Length == 0;
             Info = new ExecutionInfo();
             Info.SetTriedHosts(bridgedRowSet.ExtractCoordinatorFromRust());
-            _genericSerializer = serializerManager?.GetGenericSerializer() ?? new GenericSerializer();
         }
 
         internal BridgedRowSet BridgedRowSet =>
