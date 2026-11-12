@@ -27,6 +27,28 @@ namespace Cassandra.IntegrationTests.Core
             : base(3, createSession: true) { }
 
         [Test]
+        public async Task BridgedSession_SecondShutdown_ThrowsAlreadyShutdown()
+        {
+            // The C# Session guards against a second ShutdownAsync. This test calls the
+            // bridge directly: the Rust side must report AlreadyShutdownException, not panic.
+            var contactPoint = $"{TestCluster.InitialContactPoint}:{Cluster.Configuration.ProtocolOptions.Port}";
+            var bridgedSession = await BridgedSession.Create(contactPoint, null, Cluster.Configuration).ConfigureAwait(false);
+            try
+            {
+                var firstResult = await bridgedSession.Shutdown().ConfigureAwait(false);
+                new EmptyRustResource(firstResult).Dispose();
+
+                await NUnit.Framework.Assert.ThatAsync(
+                    () => bridgedSession.Shutdown(),
+                    Throws.TypeOf<AlreadyShutdownException>()).ConfigureAwait(false);
+            }
+            finally
+            {
+                bridgedSession.Dispose();
+            }
+        }
+
+        [Test]
         public void Session_NewQueriesFailAfterShutdownBegins()
         {
             var localSession = GetNewTemporarySession(KeyspaceName);
