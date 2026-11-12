@@ -161,6 +161,20 @@ The underlying Rust driver only supports a global, session-level request timeout
 
 The underlying Rust driver, due to its architecture based on the tokio async framework, only supports `SO_LINGER` set to 0. Enabling non-0 linger is not supported and will result in an exception being thrown.
 
+## Builder API
+
+### Not yet supported API
+
+#### `WithColumnEncryptionPolicy`
+
+```csharp
+public Builder WithColumnEncryptionPolicy(IColumnEncryptionPolicy policy)
+```
+
+The C# RS Driver does not implement client-side column encryption yet. `WithColumnEncryptionPolicy` throws `NotSupportedException` for a non-null policy. The driver rejects the policy at configuration time. Thus it never writes plaintext values to columns that the policy marks as encrypted.
+
+**Migration Impact:** Remove the call to `WithColumnEncryptionPolicy`, or keep the encryption in your application code. The method still accepts `null`. Without a policy, the driver reads the encrypted columns as raw `byte[]` values and does not decrypt them.
+
 ## SimpleStatement API
 
 ### Removed APIs
