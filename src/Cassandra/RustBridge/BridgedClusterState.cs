@@ -704,6 +704,11 @@ namespace Cassandra
                 var tableColumnsContext = Unsafe.AsRef<TableColumnsContext>((void*)tableColumnsContextPtr);
                 var tableColumnsList = tableColumnsContext.Columns;
 
+                // Rust keeps the columns in a HashMap, so their order is not stable.
+                // Legacy read them from system_schema.columns, which is clustered by column_name,
+                // so TableColumns was sorted by name. Keep that order.
+                // Sort in place: no LINQ buffers, and the static lambda is cached.
+                tableColumnsList.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
                 var tableColumnsDictionary = new Dictionary<string, TableColumn>();
                 foreach (var tc in tableColumnsList)
                 {
@@ -721,6 +726,7 @@ namespace Cassandra
                     {
                         throw new InvalidOperationException($"Partition key column '{pkName}' not found in columns list for table '{tableMetadata.Name}'.");
                     }
+                    column.KeyType = KeyType.Partition;
                     partitionKeysColumns[i] = column;
                 }
 
@@ -734,6 +740,7 @@ namespace Cassandra
                     {
                         throw new InvalidOperationException($"Clustering key column '{ckName}' not found in columns list for table '{tableMetadata.Name}'.");
                     }
+                    column.KeyType = KeyType.Clustering;
                     clusteringKeysColumns[i] = new Tuple<TableColumn, DataCollectionMetadata.SortOrder>(column, DataCollectionMetadata.SortOrder.Ascending);
                 }
 
