@@ -272,10 +272,23 @@ namespace Cassandra.IntegrationTests.Core
             Assert.AreEqual(1, rowList.Count);
             var retrievedVector = rowList[0].GetValue<CqlVector<T>>("j");
             Assert.AreEqual(3, retrievedVector.Count);
+            AssertEnumeratedValueHasColumnType(rs, rowList[0], "j");
             for (var idx = 0; idx < retrievedVector.Count; idx++)
             {
                 assertFn(expected[idx], retrievedVector[idx]);
             }
+        }
+
+        /// <summary>
+        /// Row enumeration reads each value as <see cref="CqlColumn.Type"/>.
+        /// For a vector column, the value must have exactly that type, for example <c>CqlVector&lt;float&gt;</c>.
+        /// </summary>
+        private static void AssertEnumeratedValueHasColumnType(RowSet rs, Row row, string columnName)
+        {
+            var column = rs.Columns.Single(c => c.Name == columnName);
+            var value = row.ToArray()[column.Index];
+            Assert.IsNotNull(value, $"Value of column '{columnName}'");
+            Assert.AreEqual(column.Type, value.GetType(), $"Type of column '{columnName}'");
         }
 
         private void AssertSimpleVectorEquals<T>(CqlVector<T> expected, IEnumerable<T> actual, Action<object, object> assertFn)
@@ -292,6 +305,9 @@ namespace Cassandra.IntegrationTests.Core
         {
             var rowList = rs.ToList();
             Assert.AreEqual(1, rowList.Count);
+
+            AssertEnumeratedValueHasColumnType(rs, rowList[0], "k");
+            AssertEnumeratedValueHasColumnType(rs, rowList[0], "l");
 
             var retrievedVector1 = rowList[0].GetValue<CqlVector<CqlVector<T>>>("k");
             Assert.AreEqual(3, retrievedVector1.Count);

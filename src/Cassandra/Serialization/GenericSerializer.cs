@@ -97,7 +97,9 @@ namespace Cassandra.Serialization
             {
                 case ColumnTypeCode.Custom:
                     {
-                        if (_customDeserializers.Count == 0 || !_customDeserializers.TryGetValue(typeInfo, out typeSerializer))
+                        // The Rust wrapper reports a type that it does not map as Custom without type info.
+                        // Read such a value as byte[]. TryGetValue throws on a null key.
+                        if (typeInfo == null || _customDeserializers.Count == 0 || !_customDeserializers.TryGetValue(typeInfo, out typeSerializer))
                         {
                             // Use byte[] by default
                             typeSerializer = TypeSerializer.PrimitiveByteArraySerializer;
@@ -140,6 +142,12 @@ namespace Cassandra.Serialization
 
         public Type GetClrTypeForCustom(IColumnInfo typeInfo)
         {
+            if (typeInfo == null)
+            {
+                // The Rust wrapper reports a type that it does not map as Custom without type info.
+                // Deserialize returns byte[] for such a value.
+                return TypeSerializer.PrimitiveByteArraySerializer.Type;
+            }
             var customTypeInfo = (CustomColumnInfo)typeInfo;
             if (customTypeInfo.CustomTypeName == null || !customTypeInfo.CustomTypeName.StartsWith(DataTypeParser.UdtTypeName))
             {
@@ -289,7 +297,9 @@ namespace Cassandra.Serialization
             _defaultTypes.Add(ColumnTypeCode.List, _collectionSerializer.GetClrTypeForList);
             _defaultTypes.Add(ColumnTypeCode.Set, _collectionSerializer.GetClrTypeForSet);
             _defaultTypes.Add(ColumnTypeCode.Map, _dictionarySerializer.GetClrType);
-            _defaultTypes.Add(ColumnTypeCode.Udt, _udtSerializer.GetClrType);
+            // SetSpecificSerializers can replace _udtSerializer after this method. Thus read the field
+            // on each call. A method group would keep the first UdtSerializer instance.
+            _defaultTypes.Add(ColumnTypeCode.Udt, typeInfo => _udtSerializer.GetClrType(typeInfo));
             _defaultTypes.Add(ColumnTypeCode.Tuple, _tupleSerializer.GetClrType);
         }
 

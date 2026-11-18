@@ -122,7 +122,8 @@ namespace Cassandra
         internal PreparedStatement(RustBridge.ManuallyDestructible mdPreparedStatement, string cql, ISerializerManager serializerManager)
         {
             bridgedPreparedStatement = new BridgedPreparedStatement(mdPreparedStatement);
-            _variablesMetadata = bridgedPreparedStatement.ExtractVariablesMetadataFromRust();
+            _variablesMetadata = bridgedPreparedStatement.ExtractVariablesMetadataFromRust(
+                serializerManager?.GetGenericSerializer() ?? new GenericSerializer());
             Cql = cql;
             _isLwt = bridgedPreparedStatement.IsLwt();
             _serializerManager = serializerManager;

@@ -206,6 +206,12 @@ namespace Cassandra.IntegrationTests.Core
 
             Assert.AreEqual(ColumnTypeCode.Text, columns["t"].TypeCode);
             Assert.IsNull(columns["t"].TypeInfo);
+
+            // Like the legacy driver, schema metadata does not set the CLR type.
+            foreach (var column in columns.Values)
+            {
+                Assert.IsNull(column.Type, $"TableColumn.Type should be null for column '{column.Name}'");
+            }
         }
     }
 }

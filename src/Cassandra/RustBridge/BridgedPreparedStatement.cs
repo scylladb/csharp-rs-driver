@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using static Cassandra.RustBridge;
 using System.Collections.Generic;
+using Cassandra.Serialization;
 
 namespace Cassandra
 {
@@ -17,7 +18,11 @@ namespace Cassandra
         {
         }
 
-        internal RowSetMetadata ExtractVariablesMetadataFromRust()
+        /// <summary>
+        /// Gets the metadata of the bind variables from Rust.
+        /// </summary>
+        /// <param name="serializer">Gives <see cref="CqlColumn.Type"/> of each variable, see <see cref="BridgedRowSet.AssignClrTypes"/>.</param>
+        internal RowSetMetadata ExtractVariablesMetadataFromRust(IGenericSerializer serializer)
         {
             // Query Rust for the number of variable column specs
             var count = GetVariablesColumnSpecsCount();
@@ -45,6 +50,8 @@ namespace Cassandra
                     )
                 );
             }
+
+            BridgedRowSet.AssignClrTypes(columns, serializer);
 
             var metadata = new RowSetMetadata(columns, pkIndexes.ToArray());
             return metadata;

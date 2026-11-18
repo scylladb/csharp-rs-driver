@@ -639,7 +639,7 @@ namespace Cassandra
                 {
                     // From `CqlColumn`
                     Index = -1, // FIXME
-                    Type = BridgedRowSet.MapTypeFromCode((ColumnTypeCode)typeCode),
+                    // Type stays null, like in the legacy driver. See the remarks of TableColumn.
                     // From `ColumnDesc`
                     Name = columnName.ToManagedString(),
                     TypeCode = (ColumnTypeCode)typeCode,
