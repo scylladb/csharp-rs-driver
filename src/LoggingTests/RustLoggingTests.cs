@@ -70,8 +70,7 @@ namespace Cassandra.LoggingTests
 
         private static void AssertRustLogs(TraceLevel level, int? expectedMessageCount, bool assertConnectLog = false)
         {
-            var writer = new StringWriter();
-            var listener = new TextWriterTraceListener(writer);
+            var listener = new CollectingTraceListener();
             SimulacronCluster testCluster = null;
             ICluster cluster = null;
 
@@ -86,17 +85,17 @@ namespace Cassandra.LoggingTests
 
                 if (assertConnectLog)
                 {
-                    var hasRustLog = writer.ToString().Contains("Rust");
+                    var hasRustLog = listener.Text.Contains("Rust");
                     Assert.That(hasRustLog, Is.True, "The trace listener should have captured at least one log message forwarded from the Rust bridge.");
                     return;
                 }
 
-                writer.GetStringBuilder().Clear();
+                listener.Clear();
 
                 emit_all_log_levels();
                 Trace.Flush();
 
-                var traceOutput = writer.ToString();
+                var traceOutput = listener.Text;
                 var traceCount = traceOutput.Split("This is a", StringSplitOptions.None).Length - 1;
                 Assert.That(traceCount, Is.EqualTo(expectedMessageCount), $"Failed for level {level}. Messages captured: {traceOutput}");
             }
@@ -104,7 +103,6 @@ namespace Cassandra.LoggingTests
             {
                 Trace.Listeners.Remove(listener);
                 listener.Dispose();
-                writer.Dispose();
                 cluster?.Dispose();
                 testCluster?.Dispose();
             }
@@ -140,6 +138,37 @@ namespace Cassandra.LoggingTests
             {
                 cluster?.Dispose();
                 testCluster?.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Collects the trace output in a thread-safe queue.
+        /// The driver also writes log entries from background threads, for example from the Tokio worker
+        /// threads of Rust. A <see cref="StringWriter"/> is not thread-safe. Thus the test thread must not
+        /// read a <see cref="StringWriter"/> while another thread writes to it.
+        /// </summary>
+        private sealed class CollectingTraceListener : TraceListener
+        {
+            private readonly ConcurrentQueue<string> _entries = new ConcurrentQueue<string>();
+
+            /// <summary>
+            /// The collected output, in the order of the writes.
+            /// </summary>
+            public string Text => string.Concat(_entries);
+
+            public override void Write(string message)
+            {
+                _entries.Enqueue(message);
+            }
+
+            public override void WriteLine(string message)
+            {
+                _entries.Enqueue(message + Environment.NewLine);
+            }
+
+            public void Clear()
+            {
+                while (_entries.TryDequeue(out _)) { }
             }
         }
 
