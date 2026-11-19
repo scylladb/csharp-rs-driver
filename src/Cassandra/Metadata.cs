@@ -31,6 +31,8 @@ namespace Cassandra
     /// </summary>
     public class Metadata : IDisposable
     {
+        private static readonly Logger Logger = new Logger(typeof(Metadata));
+
 #pragma warning disable CS0067
         public event HostsEventHandler HostsEvent;
 
@@ -573,9 +575,34 @@ namespace Cassandra
         /// <see cref="ProtocolOptions.MaxSchemaAgreementWaitSeconds"/> does not apply.
         /// </summary>
         /// <returns>True if schema agreement was successful and false if it was not successful.</returns>
-        public Task<bool> CheckSchemaAgreementAsync()
+        public async Task<bool> CheckSchemaAgreementAsync()
         {
-            throw new NotImplementedException();
+            // Like the legacy driver: the read timeout limits the schema version queries.
+            // Get it before the session, so that this line cannot leak the session reference.
+            var timeoutMillis = Configuration.DefaultRequestOptions.ReadTimeoutMillis;
+            var session = _getActiveSessionOrThrow();
+            try
+            {
+                Task<bool> check;
+                try
+                {
+                    check = session.CheckSchemaAgreementAsync(timeoutMillis);
+                }
+                finally
+                {
+                    // The Rust side keeps its own reference to the session until the check ends,
+                    // so release the reference from _getActiveSessionOrThrow before the await.
+                    session.DecreaseReferenceCount();
+                }
+
+                return await check.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // Like the legacy driver: any error gives false.
+                Metadata.Logger.Error("Error while checking schema agreement.", ex);
+                return false;
+            }
         }
     }
 }

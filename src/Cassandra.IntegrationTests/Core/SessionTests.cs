@@ -420,5 +420,18 @@ namespace Cassandra.IntegrationTests.Core
 
             NUnit.Framework.Assert.Throws<ArgumentException>(() => localSession.WaitForSchemaAgreement(unknownAddress));
         }
+
+        [Test]
+        public async Task Metadata_CheckSchemaAgreementAsync_ReturnsTrue_AfterSchemaChange()
+        {
+            var localCluster = GetNewTemporaryCluster();
+            var localSession = localCluster.Connect();
+            localSession.CreateKeyspaceIfNotExists(KeyspaceName, null, false);
+            localSession.ChangeKeyspace(KeyspaceName);
+            localSession.Execute($"CREATE TABLE table_{Guid.NewGuid():N} (id int PRIMARY KEY, value text)");
+
+            // The driver waits for schema agreement after a schema change, so all nodes agree now.
+            Assert.IsTrue(await localCluster.Metadata.CheckSchemaAgreementAsync().ConfigureAwait(false));
+        }
     }
 }
