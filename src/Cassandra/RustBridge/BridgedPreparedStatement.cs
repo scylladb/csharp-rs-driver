@@ -31,29 +31,31 @@ namespace Cassandra
                 return new RowSetMetadata(Array.Empty<CqlColumn>());
             }
 
-            var columns = new CqlColumn[count];
+            var columnsSlot = new StackSlot<CqlColumn[]>(new CqlColumn[count]);
             for (nuint i = 0; i < count; i++)
             {
-                columns[i] = new CqlColumn();
+                columnsSlot.Value[i] = new CqlColumn();
             }
 
-            var pkIndexes = new List<int>();
+            var columnsPtr = columnsSlot.AddressOf();
+            var pkIndexesSlot = new StackSlot<List<int>>(new());
+            var pkIndexesPtr = pkIndexesSlot.AddressOf();
             unsafe
             {
                 RunWithIncrement(handle =>
                     prepared_statement_fill_column_specs_metadata(
                         handle,
-                        (IntPtr)Unsafe.AsPointer(ref columns),
+                        columnsPtr,
                         (IntPtr)setColumnMetaPtr,
-                        (IntPtr)Unsafe.AsPointer(ref pkIndexes),
+                        pkIndexesPtr,
                         (IntPtr)AddPkIndexPtr
                     )
                 );
             }
 
-            BridgedRowSet.AssignClrTypes(columns, serializer);
+            BridgedRowSet.AssignClrTypes(columnsSlot.Value, serializer);
 
-            var metadata = new RowSetMetadata(columns, pkIndexes.ToArray());
+            var metadata = new RowSetMetadata(columnsSlot.Value, pkIndexesSlot.Value.ToArray());
             return metadata;
         }
 

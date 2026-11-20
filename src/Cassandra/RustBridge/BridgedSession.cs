@@ -375,19 +375,21 @@ namespace Cassandra
         /// </summary>
         internal string GetKeyspace()
         {
-            var stringContainer = new FFIManagedStringWriter.StringContainer();
+            var stringContainerSlot = new StackSlot<FFIManagedStringWriter.StringContainer>(new());
+            var stringContainerPtr = stringContainerSlot.AddressOf();
             unsafe
             {
                 RunWithIncrement(handle =>
                     session_get_keyspace(
                         handle,
                         (IntPtr)FFIManagedStringWriter.WriteToStrPtr,
-                        (IntPtr)Unsafe.AsPointer(ref stringContainer),
+                        stringContainerPtr,
                         (IntPtr)Globals.ConstructorsPtr
                     )
                 );
             }
-            return stringContainer.Value;
+            // The slot value is the container. The container value is the keyspace name.
+            return stringContainerSlot.Value.Value;
         }
 
         /// <summary>
