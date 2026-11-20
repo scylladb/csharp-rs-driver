@@ -386,7 +386,6 @@ namespace Cassandra
             }
 
             GC.KeepAlive(replicationOptions);
-            GC.KeepAlive(addRepFactorCallbacks);
 
             return ksmd;
         }
