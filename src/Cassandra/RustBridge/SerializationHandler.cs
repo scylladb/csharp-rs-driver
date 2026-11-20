@@ -10,9 +10,8 @@ namespace Cassandra
 {
     /// <summary>
     /// Managed context passed to the populate-values callback via an opaque pointer.
-    /// Allocated on the caller's stack; its address is taken before the lambda capture
-    /// so the struct is never lifted to the heap and the pointer stays valid for the
-    /// duration of the synchronous FFI call.
+    /// The caller puts the context into a <see cref="StackSlot{T}"/> and passes the slot address.
+    /// The callback reads the context through this address during the synchronous FFI call.
     /// </summary>
     internal struct PopulateValuesContext
     {
