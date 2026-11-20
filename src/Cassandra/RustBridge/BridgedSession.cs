@@ -1,5 +1,4 @@
 using System;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Cassandra.Serialization;
@@ -191,8 +190,9 @@ namespace Cassandra
             bool isIdempotent,
             int pageSize)
         {
-            var populateCtx = SerializationHandler.CreateContext(queryValues, serializer);
-            var ctxIntPtr = (IntPtr)Unsafe.AsPointer(ref populateCtx);
+            var populateCtxSlot = new StackSlot<PopulateValuesContext>(
+                SerializationHandler.CreateContext(queryValues, serializer));
+            var ctxIntPtr = populateCtxSlot.AddressOf();
             var executionOptions = new SimpleStatementExecutionOptions(
                 hasConsistencyLevel, consistencyLevel, isIdempotent, pageSize);
             var task = RunAsyncWithIncrement<ManuallyDestructible>((tcb, ptr) =>
@@ -201,7 +201,6 @@ namespace Cassandra
                     ctxIntPtr,
                     (IntPtr)SerializationHandler.PopulateValuesPtr,
                     executionOptions));
-            GC.KeepAlive(populateCtx);
             return task;
         }
 
@@ -261,8 +260,9 @@ namespace Cassandra
             bool isIdempotent,
             int pageSize)
         {
-            var populateCtx = SerializationHandler.CreateContext(queryValues, serializer);
-            var ctxIntPtr = (IntPtr)Unsafe.AsPointer(ref populateCtx);
+            var populateCtxSlot = new StackSlot<PopulateValuesContext>(
+                SerializationHandler.CreateContext(queryValues, serializer));
+            var ctxIntPtr = populateCtxSlot.AddressOf();
 
             var executionOptions = new PreparedStatementExecutionOptions(
                 hasConsistencyLevel,
@@ -276,7 +276,6 @@ namespace Cassandra
                     ctxIntPtr,
                     (IntPtr)SerializationHandler.PopulateValuesPtr,
                     executionOptions));
-            GC.KeepAlive(populateCtx);
             return task;
         }
 
@@ -375,19 +374,21 @@ namespace Cassandra
         /// </summary>
         internal string GetKeyspace()
         {
-            var stringContainer = new FFIManagedStringWriter.StringContainer();
+            var stringContainerSlot = new StackSlot<FFIManagedStringWriter.StringContainer>(new());
+            var stringContainerPtr = stringContainerSlot.AddressOf();
             unsafe
             {
                 RunWithIncrement(handle =>
                     session_get_keyspace(
                         handle,
                         (IntPtr)FFIManagedStringWriter.WriteToStrPtr,
-                        (IntPtr)Unsafe.AsPointer(ref stringContainer),
+                        stringContainerPtr,
                         (IntPtr)Globals.ConstructorsPtr
                     )
                 );
             }
-            return stringContainer.Value;
+            // The slot value is the container. The container value is the keyspace name.
+            return stringContainerSlot.Value.Value;
         }
 
         /// <summary>
