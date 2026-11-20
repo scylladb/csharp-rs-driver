@@ -201,7 +201,6 @@ namespace Cassandra
                     ctxIntPtr,
                     (IntPtr)SerializationHandler.PopulateValuesPtr,
                     executionOptions));
-            GC.KeepAlive(populateCtxSlot.Value);
             return task;
         }
 
@@ -277,7 +276,6 @@ namespace Cassandra
                     ctxIntPtr,
                     (IntPtr)SerializationHandler.PopulateValuesPtr,
                     executionOptions));
-            GC.KeepAlive(populateCtxSlot.Value);
             return task;
         }
 
