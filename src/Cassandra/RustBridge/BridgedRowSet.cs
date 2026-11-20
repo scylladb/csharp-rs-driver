@@ -70,12 +70,6 @@ namespace Cassandra
                     )
                 );
 
-                // Prevent the GC from collecting the managed objects before
-                // the synchronous native call has finished using their pointers.
-                GC.KeepAlive(Columns);
-                GC.KeepAlive(values);
-                GC.KeepAlive(serializer);
-
                 switch (syncResult)
                 {
                     case SyncNextRowResult.GotRow:
@@ -138,11 +132,6 @@ namespace Cassandra
             {
                 FillColumnsMetadata(columnsPtr, (IntPtr)setColumnMetaPtr);
             }
-
-            // This was recommended by ChatGPT in the general case to ensure the raw pointer is still valid.
-            // I believe it's not needed in this particular case, because the columns are returned from this function,
-            // so they must live at least until `return`.
-            // GC.KeepAlive(columnsSlot.Value);
 
             AssignClrTypes(columnsSlot.Value, serializer);
 

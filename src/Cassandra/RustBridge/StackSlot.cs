@@ -65,6 +65,26 @@ namespace Cassandra
     /// Then each value has only two names: the slot and its address.
     /// </para>
     /// <para>
+    /// The FFI call sites do not need to call <c>GC.KeepAlive</c> after the FFI call. The reasons:
+    /// <list type="bullet">
+    /// <item>The code gives the address of the slot to native code.
+    /// The JIT cannot know when native code stops using the address.</item>
+    /// <item>As a result, the JIT reports the slot to the GC for the whole method,
+    /// not only until the last use of the slot in C#.</item>
+    /// <item>While the GC reports the slot, the objects that the value refers to stay alive.
+    /// Also, when the GC moves such an object, it updates the reference in the slot.</item>
+    /// </list>
+    /// This is JIT behavior. The C# and ECMA-335 specifications do not promise it.
+    /// If a future runtime changes it, read the slot after the FFI call, for example with
+    /// <c>GC.KeepAlive(slot.Value)</c>. The read makes the JIT report the slot until then.
+    /// </para>
+    /// <para>
+    /// If <typeparamref name="T"/> is a struct, <c>GC.KeepAlive(slot.Value)</c> boxes the struct
+    /// and allocates on each call. Read each reference field from the slot instead,
+    /// for example <c>GC.KeepAlive(slot.Value.Values)</c>.
+    /// <c>GC.KeepAlive</c> on the original objects does not read the slot, so it does not help.
+    /// </para>
+    /// <para>
     /// The compiler does not check these rules:
     /// <list type="bullet">
     /// <item>Use the address only during the FFI call. Rust must not keep the address after the call returns.</item>

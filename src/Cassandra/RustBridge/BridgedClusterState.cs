@@ -122,8 +122,6 @@ namespace Cassandra
                     )
                 );
             }
-
-            GC.KeepAlive(context);
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -199,7 +197,6 @@ namespace Cassandra
                 }
             }
 
-            GC.KeepAlive(contextSlot.Value);
             return contextSlot.Value.Replicas;
         }
 
@@ -231,8 +228,6 @@ namespace Cassandra
                 (IntPtr)Globals.ConstructorsPtr
             ));
 
-            GC.KeepAlive(populateCtxSlot.Value);
-            GC.KeepAlive(contextSlot.Value);
             return contextSlot.Value.Replicas;
         }
 
@@ -390,8 +385,6 @@ namespace Cassandra
                 // For other exceptions, rethrow as they indicate a failure in metadata retrieval rather than missing keyspace.
                 throw new InvalidOperationException($"Error retrieving metadata for keyspace '{keyspaceName}'.", ex);
             }
-
-            GC.KeepAlive(replicationOptionsSlot.Value);
 
             return ksmdSlot.Value;
         }
@@ -809,10 +802,6 @@ namespace Cassandra
                 // For other exceptions, rethrow as they indicate a failure in metadata retrieval rather than missing table.
                 throw new InvalidOperationException($"Error retrieving metadata for table '{tableName}' in keyspace '{keyspaceName}'.", ex);
             }
-
-            GC.KeepAlive(tableColumnsContextSlot.Value);
-            GC.KeepAlive(partitionKeysSlot.Value);
-            GC.KeepAlive(clusteringKeysSlot.Value);
 
             return tmdSlot.Value;
         }
