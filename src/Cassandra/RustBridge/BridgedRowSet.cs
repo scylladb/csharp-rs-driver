@@ -51,9 +51,12 @@ namespace Cassandra
             unsafe
             {
                 SyncNextRowResult syncResult = default;
-                IntPtr columnsPtr = (IntPtr)Unsafe.AsPointer(ref Columns);
-                IntPtr valuesPtr = (IntPtr)Unsafe.AsPointer(ref values);
-                IntPtr serializerPtr = (IntPtr)Unsafe.AsPointer(ref serializer);
+                var columnsSlot = new StackSlot<CqlColumn[]>(Columns);
+                var valuesSlot = new StackSlot<object[]>(values);
+                var serializerSlot = new StackSlot<IGenericSerializer>(serializer);
+                IntPtr columnsPtr = columnsSlot.AddressOf();
+                IntPtr valuesPtr = valuesSlot.AddressOf();
+                IntPtr serializerPtr = serializerSlot.AddressOf();
 
                 RunWithIncrement(handle =>
                     row_set_try_next_row_sync(
@@ -66,12 +69,6 @@ namespace Cassandra
                         out syncResult
                     )
                 );
-
-                // Prevent the GC from collecting the managed objects before
-                // the synchronous native call has finished using their pointers.
-                GC.KeepAlive(Columns);
-                GC.KeepAlive(values);
-                GC.KeepAlive(serializer);
 
                 switch (syncResult)
                 {
@@ -124,26 +121,21 @@ namespace Cassandra
                 return [];
             }
 
-            var columns = new CqlColumn[count];
+            var columnsSlot = new StackSlot<CqlColumn[]>(new CqlColumn[count]);
             for (nuint i = 0; i < count; i++)
             {
-                columns[i] = new CqlColumn();
+                columnsSlot.Value[i] = new CqlColumn();
             }
 
+            var columnsPtr = columnsSlot.AddressOf();
             unsafe
             {
-                void* columnsPtr = Unsafe.AsPointer(ref columns);
-                FillColumnsMetadata((IntPtr)columnsPtr, (IntPtr)setColumnMetaPtr);
+                FillColumnsMetadata(columnsPtr, (IntPtr)setColumnMetaPtr);
             }
 
-            // This was recommended by ChatGPT in the general case to ensure the raw pointer is still valid.
-            // I believe it's not needed in this particular case, because `columns` are returned from this function,
-            // so they must live at least until `return`.
-            // GC.KeepAlive(columns);
+            AssignClrTypes(columnsSlot.Value, serializer);
 
-            AssignClrTypes(columns, serializer);
-
-            return columns;
+            return columnsSlot.Value;
         }
 
         /// <summary>
@@ -438,7 +430,7 @@ namespace Cassandra
 
         /// <summary>
         /// This shall be called by Rust code for each column in a row (sync path).
-        /// Recovers managed objects from raw stack-slot pointers (via Unsafe.Read)
+        /// Recovers managed objects from <see cref="StackSlot{T}"/> addresses (via Unsafe.Read)
         /// instead of GCHandles.
         /// </summary>
         [UnmanagedCallersOnly(CallConvs = new Type[] { typeof(CallConvCdecl) })]
@@ -508,10 +500,10 @@ namespace Cassandra
 
         internal List<IPEndPoint> ExtractCoordinatorFromRust()
         {
-            IPEndPoint endpoint = null;
+            var endpointSlot = new StackSlot<IPEndPoint>(null);
+            var endpointPtr = endpointSlot.AddressOf();
             unsafe
             {
-                IntPtr endpointPtr = (IntPtr)Unsafe.AsPointer(ref endpoint);
                 RunWithIncrement(handle =>
                     row_set_fill_coordinator(
                         handle,
@@ -520,6 +512,8 @@ namespace Cassandra
                     )
                 );
             }
+            // SetCoordinator writes the endpoint into the slot.
+            var endpoint = endpointSlot.Value;
             return endpoint != null ? new List<IPEndPoint> { endpoint } : new List<IPEndPoint>(0);
         }
     }

@@ -65,14 +65,12 @@ namespace Cassandra
             try
             {
                 // Safety:
-                // contextPtr is a pointer to the stack slot holding the 'context' reference (not to the heap object itself).
-                // Unsafe.AsPointer(ref T) returns the address of the managed pointer (the stack local).
-                // The stack slot is stable for the duration of this callback since:
-                // 1. cluster_state_fill_nodes calls this callback synchronously before returning
-                // 2. The stack frame containing 'context' remains alive throughout the FFI call
-                // 3. If GC moves the RefreshContext object on the heap, it updates the reference value in the stack slot
-                // 4. Unsafe.Read dereferences the pointer to get the current reference value
-                // This matches the pattern used in row_set_fill_columns_metadata.
+                // contextPtr is the address of a StackSlot in FillHostCache. The slot holds the 'context' reference.
+                // The address stays valid during this callback:
+                // 1. cluster_state_fill_nodes calls this callback synchronously, before it returns.
+                // 2. The slot is a ref struct, thus it is on the stack of FillHostCache, which is still running.
+                // 3. If the GC moves the RefreshContext object, the GC updates the reference in the slot.
+                // See StackSlot<T> for the full explanation.
                 var context = Unsafe.AsRef<Metadata.RefreshContext>((void*)contextPtr);
 
                 var hostId = GuidFromFFIFormat(hostData.IdBytes.As<byte>().ToSpan());
@@ -112,18 +110,18 @@ namespace Cassandra
 
         internal void FillHostCache(Metadata.RefreshContext context)
         {
+            var contextSlot = new StackSlot<Metadata.RefreshContext>(context);
+            var contextPtr = contextSlot.AddressOf();
             unsafe
             {
                 RunWithIncrement(handle =>
                     cluster_state_fill_nodes(
                         handle,
-                        (IntPtr)Unsafe.AsPointer(ref context),
+                        contextPtr,
                         (IntPtr)AddHostPtr
                     )
                 );
             }
-
-            GC.KeepAlive(context);
         }
 
         [StructLayout(LayoutKind.Sequential)]
@@ -177,7 +175,8 @@ namespace Cassandra
         internal ICollection<HostShard> GetReplicasLegacyMurmur3(
             string keyspace, IReadOnlyDictionary<Guid, Host> hostsById, byte[] partitionKey)
         {
-            var context = new GetReplicasContext(hostsById);
+            var contextSlot = new StackSlot<GetReplicasContext>(new(hostsById));
+            var contextPtr = contextSlot.AddressOf();
 
             unsafe
             {
@@ -191,15 +190,14 @@ namespace Cassandra
                         ptr,
                         keyspace,
                         partitionKeySlice,
-                        (IntPtr)Unsafe.AsPointer(ref context),
+                        contextPtr,
                         (IntPtr)OnReplicaPairPtr,
                         (IntPtr)Globals.ConstructorsPtr
                     ));
                 }
             }
 
-            GC.KeepAlive(context);
-            return context.Replicas;
+            return contextSlot.Value.Replicas;
         }
 
         /// <summary>
@@ -213,23 +211,24 @@ namespace Cassandra
             IReadOnlyList<object> partitionKeyValues,
             ISerializer serializer)
         {
-            var context = new GetReplicasContext(hostsById);
-            var populateCtx = SerializationHandler.CreateContext(partitionKeyValues, serializer);
+            var contextSlot = new StackSlot<GetReplicasContext>(new(hostsById));
+            var contextPtr = contextSlot.AddressOf();
+            var populateCtxSlot = new StackSlot<PopulateValuesContext>(
+                SerializationHandler.CreateContext(partitionKeyValues, serializer));
+            var populateCtxPtr = populateCtxSlot.AddressOf();
 
             RunWithIncrement(ptr => cluster_state_get_replicas(
                 ptr,
                 keyspace,
                 table,
-                (IntPtr)Unsafe.AsPointer(ref populateCtx),
+                populateCtxPtr,
                 (IntPtr)SerializationHandler.PopulateValuesPtr,
-                (IntPtr)Unsafe.AsPointer(ref context),
+                contextPtr,
                 (IntPtr)OnReplicaPairPtr,
                 (IntPtr)Globals.ConstructorsPtr
             ));
 
-            GC.KeepAlive(populateCtx);
-            GC.KeepAlive(context);
-            return context.Replicas;
+            return contextSlot.Value.Replicas;
         }
 
         [DllImport(NativeLibrary.CSharpWrapper, CallingConvention = CallingConvention.Cdecl)]
@@ -354,8 +353,10 @@ namespace Cassandra
 
         internal KeyspaceMetadata GetKeyspaceMetadata(string keyspaceName)
         {
-            var ksmd = new KeyspaceMetadata(this, keyspaceName);
-            var replicationOptions = new Dictionary<string, string>();
+            var ksmdSlot = new StackSlot<KeyspaceMetadata>(new(this, keyspaceName));
+            var ksmdPtr = ksmdSlot.AddressOf();
+            var replicationOptionsSlot = new StackSlot<Dictionary<string, string>>(new());
+            var replicationOptionsPtr = replicationOptionsSlot.AddressOf();
             var addRepFactorCallbacks = new StrategyAddRepFactorCallbacks();
             try
             {
@@ -365,8 +366,8 @@ namespace Cassandra
                         cluster_state_get_keyspace_metadata(
                             handle,
                             keyspaceName,
-                            (IntPtr)Unsafe.AsPointer(ref ksmd),
-                            (IntPtr)Unsafe.AsPointer(ref replicationOptions),
+                            ksmdPtr,
+                            replicationOptionsPtr,
                             addRepFactorCallbacks,
                             (IntPtr)FillKeyspaceMetadataPtr,
                             (IntPtr)Globals.ConstructorsPtr
@@ -385,10 +386,7 @@ namespace Cassandra
                 throw new InvalidOperationException($"Error retrieving metadata for keyspace '{keyspaceName}'.", ex);
             }
 
-            GC.KeepAlive(replicationOptions);
-            GC.KeepAlive(addRepFactorCallbacks);
-
-            return ksmd;
+            return ksmdSlot.Value;
         }
 
         [DllImport(NativeLibrary.CSharpWrapper, CallingConvention = CallingConvention.Cdecl)]
@@ -418,20 +416,21 @@ namespace Cassandra
 
         internal List<string> GetKeyspaceNames()
         {
-            List<string> keyspaceNames = new List<string>();
+            var keyspaceNamesSlot = new StackSlot<List<string>>(new());
+            var keyspaceNamesPtr = keyspaceNamesSlot.AddressOf();
 
             unsafe
             {
                 RunWithIncrement(handle =>
                     cluster_state_get_keyspace_names(
                         handle,
-                        (IntPtr)Unsafe.AsPointer(ref keyspaceNames),
+                        keyspaceNamesPtr,
                         (IntPtr)AddKeyspaceNamePtr
                     )
                 );
             }
 
-            return keyspaceNames;
+            return keyspaceNamesSlot.Value;
         }
 
         [DllImport(NativeLibrary.CSharpWrapper, CallingConvention = CallingConvention.Cdecl)]
@@ -463,7 +462,8 @@ namespace Cassandra
 
         internal List<string> GetTableNames(string keyspaceName)
         {
-            List<string> tableNames = new List<string>();
+            var tableNamesSlot = new StackSlot<List<string>>(new());
+            var tableNamesPtr = tableNamesSlot.AddressOf();
 
             try
             {
@@ -473,7 +473,7 @@ namespace Cassandra
                         cluster_state_get_table_names(
                             handle,
                             keyspaceName,
-                            (IntPtr)Unsafe.AsPointer(ref tableNames),
+                            tableNamesPtr,
                             (IntPtr)AddTableNamesPtr,
                             (IntPtr)Globals.ConstructorsPtr
                         )
@@ -491,7 +491,7 @@ namespace Cassandra
                 throw new InvalidOperationException($"Error retrieving metadata for keyspace '{keyspaceName}'.", ex);
             }
 
-            return tableNames;
+            return tableNamesSlot.Value;
         }
 
         /// <summary>
@@ -579,7 +579,8 @@ namespace Cassandra
 
         internal UdtColumnInfo GetUdtMetadata(string keyspaceName, string udtName)
         {
-            var udtContext = new UdtContext(keyspaceName);
+            var udtContextSlot = new StackSlot<UdtContext>(new(keyspaceName));
+            var udtContextPtr = udtContextSlot.AddressOf();
 
             try
             {
@@ -591,7 +592,7 @@ namespace Cassandra
                             keyspaceName,
                             udtName,
                             (IntPtr)ConstructUdtFieldPtr,
-                            (IntPtr)Unsafe.AsPointer(ref udtContext),
+                            udtContextPtr,
                             (IntPtr)FillUdtMetadataPtr,
                             (IntPtr)Globals.ConstructorsPtr
                         ));
@@ -606,7 +607,7 @@ namespace Cassandra
                 throw new InvalidOperationException($"Error retrieving metadata for UDT '{udtName}' in keyspace '{keyspaceName}'.", ex);
             }
 
-            return udtContext.UdtDefinition;
+            return udtContextSlot.Value.UdtDefinition;
         }
 
         private sealed class TableColumnsContext
@@ -761,10 +762,14 @@ namespace Cassandra
 
         internal TableMetadata GetTableMetadata(string keyspaceName, string tableName)
         {
-            var tmd = new TableMetadata(keyspaceName, tableName);
-            var tableColumnsContext = new TableColumnsContext(keyspaceName);
-            var partitionKeys = new List<string>();
-            var clusteringKeys = new List<string>();
+            var tmdSlot = new StackSlot<TableMetadata>(new(keyspaceName, tableName));
+            var tmdPtr = tmdSlot.AddressOf();
+            var tableColumnsContextSlot = new StackSlot<TableColumnsContext>(new(keyspaceName));
+            var tableColumnsContextPtr = tableColumnsContextSlot.AddressOf();
+            var partitionKeysSlot = new StackSlot<List<string>>(new());
+            var partitionKeysPtr = partitionKeysSlot.AddressOf();
+            var clusteringKeysSlot = new StackSlot<List<string>>(new());
+            var clusteringKeysPtr = clusteringKeysSlot.AddressOf();
 
             try
             {
@@ -775,12 +780,12 @@ namespace Cassandra
                             handle,
                             keyspaceName,
                             tableName,
-                            (IntPtr)Unsafe.AsPointer(ref tableColumnsContext),
+                            tableColumnsContextPtr,
                             (IntPtr)ConstructTableColumnPtr,
-                            (IntPtr)Unsafe.AsPointer(ref partitionKeys),
-                            (IntPtr)Unsafe.AsPointer(ref clusteringKeys),
+                            partitionKeysPtr,
+                            clusteringKeysPtr,
                             (IntPtr)AddPrimaryKeyPtr,
-                            (IntPtr)Unsafe.AsPointer(ref tmd),
+                            tmdPtr,
                             (IntPtr)FillTableMetadataPtr,
                             (IntPtr)Globals.ConstructorsPtr
                         )
@@ -798,11 +803,7 @@ namespace Cassandra
                 throw new InvalidOperationException($"Error retrieving metadata for table '{tableName}' in keyspace '{keyspaceName}'.", ex);
             }
 
-            GC.KeepAlive(tableColumnsContext);
-            GC.KeepAlive(partitionKeys);
-            GC.KeepAlive(clusteringKeys);
-
-            return tmd;
+            return tmdSlot.Value;
         }
     }
 }
